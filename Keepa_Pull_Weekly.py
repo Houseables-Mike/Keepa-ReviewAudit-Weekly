@@ -44,6 +44,10 @@ DELAY_SECONDS = 13  # ~1 token/13 sec = 5/min, safe for 1 token per product
 RATING_SHEET_NAME = 'Star Ratings'
 REVIEW_SHEET_NAME = 'Review Counts'
 
+STAGGER_SHEET_ID = os.getenv('STAGGER_SHEET_ID')
+MAIN_TAB_NAME = 'Main'
+REFERENCE_HEADERS = ['FBA SKU', 'Product', 'Order Status', 'Grade']
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
@@ -157,6 +161,43 @@ def fetch_keepa_data(asins):
     return results
 
 
+# ---- Stagger Charts reference lookup ----
+def build_stagger_lookup(gc):
+    """Read the Main tab of Stagger Charts V9 and build a dict:
+    ASIN -> (FBA SKU, Product, Order Status, Grade)."""
+    stagger_sheet = gc.open_by_key(STAGGER_SHEET_ID)
+    ws = stagger_sheet.worksheet(MAIN_TAB_NAME)
+    all_values = ws.get_all_values()
+
+    lookup = {}
+    for row in all_values[1:]:
+        if len(row) <= 11:
+            continue
+        asin = row[11].strip()
+        if not asin:
+            continue
+        fba_sku = row[1] if len(row) > 1 else ''
+        product = row[2] if len(row) > 2 else ''
+        order_status = row[6] if len(row) > 6 else ''
+        grade = row[14] if len(row) > 14 else ''
+        lookup[asin] = (fba_sku, product, order_status, grade)
+
+    return lookup
+
+
+def refresh_reference_columns(ws, lookup):
+    """Overwrite columns B-E for every ASIN row with the latest values from
+    Stagger Charts, so this data never goes stale relative to the master sheet."""
+    asin_col = ws.col_values(1)  # index 0 is the header
+    rows = []
+    for asin in asin_col[1:]:
+        values = lookup.get(asin, ('', '', '', ''))
+        rows.append(list(values))
+
+    if rows:
+        ws.update('B2', rows)
+
+
 # ---- Component 4: Sheet-writing logic ----
 def col_letter(n):
     """Convert a 1-indexed column number to its A1 letter (1 -> A, 27 -> AA, etc.)."""
@@ -168,13 +209,15 @@ def col_letter(n):
 
 
 def get_or_create_worksheet(sheet, name, asins):
-    """Get the worksheet by name, creating it (and seeding column A with ASINs) if needed.
-    If it already exists, appends any ASINs not yet present."""
+    """Get the worksheet by name, creating it (and seeding column A with ASINs,
+    plus the reference column headers) if needed. If it already exists,
+    appends any ASINs not yet present."""
     try:
         ws = sheet.worksheet(name)
     except gspread.exceptions.WorksheetNotFound:
         ws = sheet.add_worksheet(title=name, rows=len(asins) + 10, cols=52)
-        ws.update('A1', [['ASIN']] + [[a] for a in asins])
+        header = ['ASIN'] + REFERENCE_HEADERS
+        ws.update('A1', [header] + [[a] for a in asins])
         return ws
 
     existing = ws.col_values(1)[1:]  # skip header row
@@ -211,6 +254,12 @@ def main():
 
     rating_ws = get_or_create_worksheet(sheet, RATING_SHEET_NAME, asins)
     review_ws = get_or_create_worksheet(sheet, REVIEW_SHEET_NAME, asins)
+
+    print('Refreshing reference columns (FBA SKU, Product, Order Status, Grade) from Stagger Charts...')
+    stagger_lookup = build_stagger_lookup(gc)
+    refresh_reference_columns(rating_ws, stagger_lookup)
+    refresh_reference_columns(review_ws, stagger_lookup)
+    print(f'  Matched {len(stagger_lookup)} ASINs available in Stagger Charts\n')
 
     results = fetch_keepa_data(asins)
 
