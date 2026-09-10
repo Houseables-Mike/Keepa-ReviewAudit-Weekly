@@ -35,7 +35,7 @@ load_dotenv()
 # ---- Config ----
 API_KEY = os.getenv('KEEPA')
 SHEET_ID = os.getenv('SHEET_ID')
-CREDENTIALS_FILE = 'credentials.json'
+CREDENTIALS_FILE = os.getenv('GOOGLE_CREDS_JSON')
 ASIN_FILE = 'asins.txt'
 
 DATE_STR = datetime.today().strftime('%m/%d/%Y')
