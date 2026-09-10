@@ -25,4 +25,5 @@ jobs:
           KEEPA: ${{ secrets.KEEPA }}
           SHEET_ID: ${{ secrets.SHEET_ID }}
           GOOGLE_CREDS_JSON: ${{ secrets.GOOGLE_CREDS_JSON }}
+          STAGGER_SHEET_ID: ${{ secrets.STAGGER_SHEET_ID }}
         run: python Keepa_Pull_Weekly.py
