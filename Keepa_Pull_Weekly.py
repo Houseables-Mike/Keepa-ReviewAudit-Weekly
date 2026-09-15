@@ -242,6 +242,19 @@ def write_column(ws, values_by_asin, header):
     ws.update(f'{letter}1', col_values)
 
 
+def sort_by_fba_sku(ws):
+    """Sort all data rows by FBA SKU (column B), keeping the header row fixed in place."""
+    last_row = len(ws.col_values(1))
+    if last_row <= 2:
+        return  # nothing meaningful to sort with 0-1 data rows
+
+    last_col_index = len(ws.row_values(1))
+    last_col = col_letter(last_col_index)
+    sort_range = f'A2:{last_col}{last_row}'
+
+    ws.sort((2, 'asc'), range=sort_range)
+
+
 # ---- Integration ----
 def main():
     asins = load_asins(ASIN_FILE)
@@ -268,6 +281,10 @@ def main():
 
     write_column(rating_ws, ratings, DATE_STR)
     write_column(review_ws, reviews, DATE_STR)
+
+    print('Sorting rows by FBA SKU...')
+    sort_by_fba_sku(rating_ws)
+    sort_by_fba_sku(review_ws)
 
     print(f'\nComplete. "{RATING_SHEET_NAME}" and "{REVIEW_SHEET_NAME}" updated for {DATE_STR}')
 
